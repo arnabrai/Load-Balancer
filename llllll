@@ -43,6 +43,8 @@ class Config:
     MIN_LIDAR_DIST          = 0.05
     MAX_LIDAR_DIST          = 5.0
     MIN_VALID_POINTS        = 5     # Sparsity check
+    LIDAR_ANGLE_OFFSET      = 180.0 # Rotation in DEGREES (QCar2 typical: 180)
+    LIDAR_REVERSE           = True  # Flip if left/right are swapped
 
 class ReactiveController:
     def __init__(self, cfg: Config):
@@ -61,11 +63,14 @@ class ReactiveController:
         raw_angles = np.array(angles)
         raw_distances = np.array(distances)
 
-        # Center angles around 0 (front)
-        # Note: QCarLidar 0 deg is usually front, but depends on mounting. 
-        # Based on previous scripts, we assume 0 is front or adjust accordingly.
-        # Let's normalize angles to [-pi, pi]
-        adj_angles = (raw_angles + math.pi) % (2 * math.pi) - math.pi
+        # 1. Flip angles if reversed
+        if self.cfg.LIDAR_REVERSE:
+            raw_angles = (2 * math.pi - raw_angles) % (2 * math.pi)
+        
+        # 2. Add offset (e.g. 180 deg) and normalize to [-pi, pi]
+        # 0 should be FRONT
+        adj_angles = (raw_angles + math.radians(self.cfg.LIDAR_ANGLE_OFFSET))
+        adj_angles = (adj_angles + math.pi) % (2 * math.pi) - math.pi
         
         mask = (np.abs(np.degrees(adj_angles)) <= self.cfg.FRONT_ARC) & \
                (raw_distances > self.cfg.MIN_LIDAR_DIST) & \
